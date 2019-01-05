@@ -1,6 +1,7 @@
 # required packages
 
 library(rjags)
+library(tidyverse)
 
 # data
 
@@ -17,7 +18,7 @@ slr_string = "model {
 	# normal likelihood
 	
 	for (i in 1:N) {
-		y[i] ~ dnorm(beta0 + beta1* weight[i], 1/sigma^2)
+		acceleration[i] ~ dnorm(beta0 + beta1* weight[i], 1/sigma^2)
 	}
 	
 	# priors
@@ -35,7 +36,7 @@ set.seed(100)
 
 # data for jags
 
-dat <- list(y = auto_df$acceleration
+dat <- list(acceleration = auto_df$acceleration
 , N = nrow(auto_df)
 , weight = auto_df$weight)
 
