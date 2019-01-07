@@ -15,6 +15,13 @@ R/mr.R
 ```
 A single continuous target variable and more than one continuous predictor variable.
 
+## Logistic Regression
+
+```
+R/lr.R
+```
+A single binary target variable and more than one continuous predictor variables. 
+
 ## Required Software
 
 ### R
