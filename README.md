@@ -1,6 +1,12 @@
 # Introduction to Bayesian GLM Regression Methods
 
+The intention here is to provide minimal examples of these methods which will serve as a reference for keen bayesian practitioners!
+
+To keep things simple, uninformed priors are used. Methods are compared to their frequentist alternatives where possible.
+
 ## Simple Linear Regression
+
+### R
 
 ```
 R/slr.R
@@ -10,6 +16,8 @@ A single continuous target variable and a single continuous predictor variable.
 
 ## Multiple Linear Regression
 
+### R
+
 ```
 R/mr.R
 ```
@@ -17,10 +25,12 @@ A single continuous target variable and more than one continuous predictor varia
 
 ## Logistic Regression
 
+### R
+
 ```
 R/lr.R
 ```
-A single binary target variable and more than one continuous predictor variables. 
+A single binary target variable and more than one continuous predictor variables.
 
 ## Required Software
 
