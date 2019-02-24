@@ -6,31 +6,63 @@ To keep things simple, uninformed priors are used. Methods are compared to their
 
 ## Simple Linear Regression
 
+A single continuous target variable and a single continuous predictor variable.
+
 ### R
+
+#### JAGS
 
 ```
 R/slr.R
 ```
 
-A single continuous target variable and a single continuous predictor variable.
+### Python
+
+#### PyMC3
+
+```
+python/notebooks/slr.ipynb
+```
 
 ## Multiple Linear Regression
 
+A single continuous target variable and more than one continuous predictor variable.
+
 ### R
+
+#### JAGS
 
 ```
 R/mr.R
 ```
-A single continuous target variable and more than one continuous predictor variable.
+
+### Python
+
+#### PyMC3
+
+```
+python/notebooks/mr.ipynb
+```
 
 ## Logistic Regression
 
+A single binary target variable and more than one continuous predictor variables.
+
 ### R
 
+#### JAGS
+
 ```
-R/lr.R
+R/glm.R
 ```
-A single binary target variable and more than one continuous predictor variables.
+
+### Python
+
+#### PyMC3
+
+```
+python/notebooks/glm.ipynb
+```
 
 ## Required Software
 
@@ -51,3 +83,7 @@ other attached packages:
  [5] readr_1.1.1     tidyr_0.8.1     tibble_1.4.2    ggplot2_3.0.0  
  [9] tidyverse_1.2.1 rjags_4-8       coda_0.19-2
 ```
+
+### Python
+
+Create a conda environment featuring `numpy pandas statsmodels seaborn pymc3`
