@@ -4,13 +4,13 @@ author: "Nick Burns"
 date: "1 March 2019"
 output:
   html_document:
-    mathjax: "http://example.com/MathJax.js"
+    mathjax: "https://d3eoax9i5htok0.cloudfront.net/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
 ---
 
 # Simple Linear Regression  
 ## Stan Implementation  
 
-This notebook is the first of our Stan-implementations as "minimal introductions" to Bayesian modelling, or probabilistic programming. As you grow more comfortable, or want to explore further, the [https://mc-stan.org/users/documentation/](Stan user Guide) and Bayesian Data Analysis (Third Edition, Gelman *et al*) provide thorough practical examples and theoretical background respectively.
+This notebook is the first of our Stan-implementations as "minimal introductions" to Bayesian modelling, or probabilistic programming. As you grow more comfortable, or want to explore further, the [Stan user Guide](https://mc-stan.org/users/documentation/) and Bayesian Data Analysis (Third Edition, Gelman *et al*) provide thorough practical examples and theoretical background respectively.
 
 Below, we will give a very brief introduction to the structure of a Stan program and walk through a minimal example of Bayesian linear regression.
 
@@ -18,21 +18,17 @@ Below, we will give a very brief introduction to the structure of a Stan program
 
 Stan follows a reasonably simple ideology: that if you can express a model mathematically, then the code should follow naturally. That said, I do't believe that it is quite that simple, and there are higher-level packages (such as Richard McElreath's `rethinking` package, `tidybayes`, or even `JAGS`) which have got, arguably, cleaner syntax. However, Stan is certainly more powerful and more flexible than most other Bayesian packages. 
 
-A minimal Stan program should have three components: a section for the data, one for the parameters and one for the model definition itself. The [https://mc-stan.org/docs/2_18/stan-users-guide/linear-regression.html](Stan User Guide) gives a nice example, which we show below:
+A minimal Stan program should have three components: a section for the data, one for the parameters and one for the model definition itself. The [Stan User Guide](https://mc-stan.org/docs/2_18/stan-users-guide/linear-regression.html) gives a nice example, which we show below:
 
 If we assume that a regular linear regression model can be written:
 
-```
-$y ~ \alpha + \beta x_n + \epsilon_n, where \epsilon_n ~ normal(0, \sigma)$
-```
+$y \sim \alpha + \beta * x_n + \epsilon_n,  \epsilon_n \sim normal(0, \sigma)$
 
 This can be further simplified:
 
-```
-$$
-y ~ normal(\alpha + \beta x_n + \sigma)
-$$
-```
+
+$y \sim normal(\alpha + \beta * x_n + \sigma)$
+
 
 This final form can be expressed directly in Stan code. To create our Stan program, we will define separate blocks for the `data`, `parameters` and the `model`. This code is saved in a file called `./slr.stan`:
 
@@ -89,7 +85,7 @@ fit <- stan(file="./slr.stan",
 Notes:   
 
   - we have fit 4 chains so that we can check the convergence diagnostics across all of the chains  
-  - we have specified the algorithm, Hamiltonian Monte Carlo. Why HMC? I'll quote the tldr from  [http://elevanth.org/blog/2017/11/28/build-a-better-markov-chain/](this post by Richard McElreath): "If you are still using a Gibbs sampler, you are working too hard for too little result. Newer, better algorithms trade random walks for frictionless flow."  
+  - we have specified the algorithm, Hamiltonian Monte Carlo. Why HMC? I'll quote the tldr from  [this post by Richard McElreath](http://elevanth.org/blog/2017/11/28/build-a-better-markov-chain/): "If you are still using a Gibbs sampler, you are working too hard for too little result. Newer, better algorithms trade random walks for frictionless flow."  
   - remember, we have scaled the data  
 
 ### Convergence diagnostics  
