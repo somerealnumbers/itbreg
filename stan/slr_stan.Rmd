@@ -1,0 +1,148 @@
+---
+title: "slr_stan"
+author: "Nick Burns"
+date: "1 March 2019"
+output:
+  html_document:
+    mathjax: "https://d3eoax9i5htok0.cloudfront.net/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+---
+
+# Simple Linear Regression  
+## Stan Implementation  
+
+This notebook is the first of our Stan-implementations as "minimal introductions" to Bayesian modelling, or probabilistic programming. As you grow more comfortable, or want to explore further, the [Stan user Guide](https://mc-stan.org/users/documentation/) and Bayesian Data Analysis (Third Edition, Gelman *et al*) provide thorough practical examples and theoretical background respectively.
+
+Below, we will give a very brief introduction to the structure of a Stan program and walk through a minimal example of Bayesian linear regression.
+
+### The structure of a Stan program  
+
+Stan follows a reasonably simple ideology: that if you can express a model mathematically, then the code should follow naturally. That said, I do't believe that it is quite that simple, and there are higher-level packages (such as Richard McElreath's `rethinking` package, `tidybayes`, or even `JAGS`) which have got, arguably, cleaner syntax. However, Stan is certainly more powerful and more flexible than most other Bayesian packages. 
+
+A minimal Stan program should have three components: a section for the data, one for the parameters and one for the model definition itself. The [Stan User Guide](https://mc-stan.org/docs/2_18/stan-users-guide/linear-regression.html) gives a nice example, which we show below:
+
+If we assume that a regular linear regression model can be written:
+
+$y \sim \alpha + \beta * x_n + \epsilon_n,  \epsilon_n \sim normal(0, \sigma)$
+
+This can be further simplified:
+
+
+$y \sim normal(\alpha + \beta * x_n + \sigma)$
+
+
+This final form can be expressed directly in Stan code. To create our Stan program, we will define separate blocks for the `data`, `parameters` and the `model`. This code is saved in a file called `./slr.stan`:
+
+```
+data {
+  int<lower=0> N;   // the number of observations
+  vector[N] x;      // the explanatory variable
+  vector[N] y;      // the dependant variable
+}
+parameters {
+  real alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+model {
+  y ~ normal(alpha + beta * x, sigma);
+}
+```
+
+### A minimal example  
+
+For this example, we will use the Automobile dataset:
+
+```{r}
+library(rstan)
+library(ggplot2)
+
+auto <- read.csv("http://www-bcf.usc.edu/~gareth/ISL/Auto.csv")
+
+ggplot(auto, aes(x = weight, y = acceleration)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle(sprintf("acceleration ~ weight (Correlation, R2 = %s)", 
+                  with(auto, round(cor(acceleration, weight), 2))))
+```
+
+You can see that there is a slight negative correlation between the `weight` of a car and it's `acceleration`. Before we fit this model, we will scale the data. This is always emphasised in your stats classes, but in practice you can often get away without it (depending on your choice of model). However, centering your data is essintial in Stan (or, more specifically, Hamilton Monte Carlo). It has a dramatic effect on how fast the chains sample. If you don't believe me, then try to fit the model with and without centering :) 
+
+```{r}
+auto$weight_scaled <- as.vector(scale(auto$weight))
+auto$acc_scaled <- as.vector(scale(auto$acceleration))
+```
+
+Next, we load this model and fit it to the data:
+
+```{r echo=TRUE, results='hide'}
+fit <- stan(file="./slr.stan",
+            data = list(N = nrow(auto), x = auto$weight_scaled, y = auto$acc_scaled),
+            pars = c("alpha", "beta", "sigma"),
+            chains = 4, iter = 2000, algorithm = "HMC")
+```
+
+
+Notes:   
+
+  - we have fit 4 chains so that we can check the convergence diagnostics across all of the chains  
+  - we have specified the algorithm, Hamiltonian Monte Carlo. Why HMC? I'll quote the tldr from  [this post by Richard McElreath](http://elevanth.org/blog/2017/11/28/build-a-better-markov-chain/): "If you are still using a Gibbs sampler, you are working too hard for too little result. Newer, better algorithms trade random walks for frictionless flow."  
+  - remember, we have scaled the data  
+
+### Convergence diagnostics  
+
+To begin with, let's look at the diagnostics:
+
+```{r}
+summary(fit)$summary
+```
+
+The diagnostics above can be overwhelming initially. But, notice that there is a column that gives the posterior mean. This is you estimate of the effect. There are also columns that give you the uncertainty around this. And importantly, there is the `Rhat` column. Ideally, there should be 1. Exactly 1. This is an indication of how stable the chains are. 
+
+In this case, the `Rhat` value for `sigma` is a little high, which suggests that we don't have a particularly stable model. This is probably because `weight` is a very weak predictor of `acceleration`. We'll live with this for this first demo.
+
+### Posterior Plots  
+
+Next, let's sample from the fitted model and plot the posterior samples:
+
+```{r}
+for (p in c("alpha", "beta", "sigma")) {
+  posterior <- extract(fit, p)
+  plot(density(posterior[[1]]), main = p, col = "dodgerblue")
+}
+```
+
+Here, the posterior estimate for the intercept (`alpha`) is essentially zero. But notice that the posterior estimate for `beta` is about -0.4, very similar to the correlation coefficient that we plotted earlier! 
+
+### Posterior Predictive Plots  
+
+By modelling the relationship (using Stan) we also have information about the uncertainty within this estimate, i.e. we have a lot more information than the correlation alone gave us. We can use our posterior distributions to generate predictions over a range of weights:  
+
+```{r}
+library(data.table)
+posterior <- extract(fit)
+
+weight_range <- seq(-2, 3, length.out = 50)
+predictions <- rbindlist(
+  lapply(weight_range, function (w) {
+    tmp <- data.table(
+      Weight = w,
+      Acceleration = with(posterior, alpha + beta * w)
+    )
+  })
+)
+
+g1 <- ggplot(auto, aes(x = weight, y = acceleration)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle("Original Data")
+
+g2 <- ggplot(auto, aes(x = weight_scaled, y = acc_scaled)) +
+  geom_point(alpha = 0.5) +
+  geom_point(data = predictions[sample(.N, 2000)], aes(x = Weight, y = Acceleration), colour = "dodgerblue", alpha = 0.1) +
+  ylab("") +
+  ggtitle("Posterior Predictions")
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
+
+Althgouh the scales are different (we could fix this), we can see that our Stan model has done a good job of capturing the weak relationship between `weight` and `acceleration`. It is very similar to the result obtain using OLS (via `geom_smooth()`). :)
