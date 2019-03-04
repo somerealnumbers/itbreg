@@ -63,9 +63,9 @@ model {
 
 Specifically, for our auto dataset, we defined the following model:  
 
-$y \sim normal(\alpha + \beta * x_n + \sigma)$
+$y \sim normal(\alpha + \beta * x_n)$
 
-Which can be expressed in Stan as:
+This is a simple linear regression, where `y` is `acceleration` and `x` is `weight` in the auto dataset. This simple model may be expressed in Stan as:
 
 ```
 data {
@@ -79,7 +79,7 @@ parameters {
   real<lower=0> sigma;
 }
 model {
-  y ~ normal(alpha + beta * x, sigma);
+  y ~ normal(alpha + beta x, sigma);
 }
 ```
 
@@ -184,7 +184,7 @@ model{
 fit02 <- stan(model_code=informative_priors,
             data = list(N = nrow(auto), x = auto$weight_scaled, y = auto$acc_scaled),
             pars = c("alpha", "beta", "sigma"),
-            chains = 4, iter = 2000, algorithm = "HMC")
+            chains = 4, iter = 5000, algorithm = "HMC")
 ```
 
 And looking at the summary output: 
