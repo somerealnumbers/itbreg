@@ -98,7 +98,13 @@ summary(fit)$summary
 
 The diagnostics above can be overwhelming initially. But, notice that there is a column that gives the posterior mean. This is you estimate of the effect. There are also columns that give you the uncertainty around this. And importantly, there is the `Rhat` column. Ideally, there should be 1. Exactly 1. This is an indication of how stable the chains are. 
 
-In this case, the `Rhat` value for `sigma` is a little high, which suggests that we don't have a particularly stable model. This is probably because `weight` is a very weak predictor of `acceleration`. We'll live with this for this first demo.
+The actual results (particularly the `Rhat` values) will change a little with each run. This is due to random initialisation and the inherrent randomness that you get from Monte Carlo methods. However, if the model is stable and it has converged to the true posterior, then the `Rhat` values should always be 1. Currently, this model is not particularly stable and I am getting quite high `Rhat` values each time I run this (in particular for the `beta` and `sigma` estimates). My intuition is that this is due to three things:   
+
+  1. the weak signal (and the small number of observations given such a weak signal)   
+  2. the fact that we haven't defined our priors, which means it defaults to flat unbounded priors. We'll explore different priors in a future workbook.  
+  3. we could also set initial values to begin from (e.g. we *know* (from the correlation coefficient) that the true effect size is -0.4, so we could initialise the estimates near here).  
+  
+For now though, we will live with what is a slightly imperfect model.
 
 ### Posterior Plots  
 
