@@ -1,0 +1,290 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Simple Linear Regression - With Priors  
+## STAN Implementation  
+
+This notebook is an extension on our previous notebook (`slr_stan.Rmd`, `srl_stan.html`), where we looked at a basic outline of a Stan program. However, we did note that the model convergence diagnostics were not always that great. In particular the `Rhat` values were often a little inflatted, which suggests that the model hadn't converged to the true posterior. 
+
+In practice, there are a number of reasons why a model might struggle to converge:  
+
+  - the signal could be quite weak, and perhaps too the number of observations on the low sice, given a weak signal  
+  - autocorrelation between your predictor variables will *always* cause you grief. This will cause the sampling to run very slowly and will usually result in poor convergence  
+
+In our case, we only have one predictor variable, so autocorrelation is obviously not the problem. However, the signal strength is quite weak. So here we will look at the effect that different priors have on the stability of the model. 
+
+We haven't really addressed priors previously in any of the examples in this repo. This is largely because we wanted to be able to compare the various implementations in a true apples-for-apples way with equivalent frequentist methods. But priors are one of the truly powerful aspects of Bayesian modelling. And if you are starting to dabble with Stan, then chances are you are more than good enough to consider setting your priors. 
+
+Andrew Gelman has a lot to say on priors, in particular noninformative (flat) priors. Gelman goes as far as saying that flat priors can result in "silly estimates" (see Gelman's blog, [Hidden dangers of noninformative priors](https://statmodeling.stat.columbia.edu/2013/11/21/hidden-dangers-noninformative-priors/)). The Stan Wiki also has a great section on [Prior Choice Recommendations](https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations).
+
+## The Automobile dataset - quick recap  
+
+Quickly, let's remind ourselves about the data that we are working with:
+
+```{r}
+library(rstan)
+library(ggplot2)
+library(data.table)
+
+auto <- read.csv("http://www-bcf.usc.edu/~gareth/ISL/Auto.csv")
+auto$weight_scaled <- as.vector(scale(auto$weight))
+auto$acc_scaled <- as.vector(scale(auto$acceleration))
+
+ggplot(auto, aes(x = weight, y = acceleration)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  ggtitle(sprintf("acceleration ~ weight (Correlation, R2 = %s)", 
+                  with(auto, round(cor(acceleration, weight), 2))))
+```
+
+Prevsiously, we were able to model the relationship between weight and acceleration and we got a good approximation of the trend plotted above:
+
+[!Flat Priors]("./results/slr_simple_results.png")
+
+## Outline of a Stan program  
+
+In our last notebook, we gave the following template for a Stan program with separate blocks for the `data`, `parameters` and `model`:
+
+```
+data {
+  // definition of the input data here
+}
+parameters {
+  // define the parameters here
+}
+model {
+  // insert model here
+}
+```
+
+Specifically, for our auto dataset, we defined the following model:  
+
+$y \sim normal(\alpha + \beta * x_n)$
+
+This is a simple linear regression, where `y` is `acceleration` and `x` is `weight` in the auto dataset. This simple model may be expressed in Stan as:
+
+```
+data {
+  int<lower=0> N;   // the number of observations
+  vector[N] x;      // the explanatory variable
+  vector[N] y;      // the dependant variable
+}
+parameters {
+  real alpha;
+  real beta;
+  real<lower=0> sigma;
+}
+model {
+  y ~ normal(alpha + beta x, sigma);
+}
+```
+
+To include priors, we are going to extend the `model` block a little. We will still assume the same form, but we are going to write it out a little more explicitly:  
+
+$$y \sim normal(\mu, \sigma) \\
+\mu = \alpha + \beta * x \\
+\alpha \sim normal(0, 100) \\
+\beta \sim normal(0, 10) \\
+\sigma \sim cauchy(0, 1)
+$$
+
+This is a little more involved, but it can be read directly:  
+
+  - `y` (our `acceleration`) is normally distributed with some mean (`mu`) and some standard deviation (`sigma`)  
+  - `mu` is the model that we defined previously. Specifically, mu is a linear model with an intercept `alpha` and a slope `beta * x`, where `x` is `weight` in our dataset  
+  - we have defined weakly informative priors on both `alpha` and `beta`. These are consistent with what we already "know" about the relationship between acceleration and weight from our previous notebook. Specifically,   
+    - we are pretty confident that the intercept term is very close to zero. But we have allowed a wider prior here (normal with `mean=0` and `sdev=100`) which will allow the model to explore this assumption  
+    - we know that there is only a weak correlation between weight and acceleration. The correlation coeficient is -0.41 and our previous estimate was also -0.4. So we have centered the prior on zero, but also allowed the model to explore positive values as well...  
+  - finally, we have defined a half-cauchy prior on `sigma`, which is a reasonable standard convention  
+  
+If you can write out a model as we have above, then you can write it in Stan just as easily (just flip it upside down). The only "trick", is that we have to define a variable `mu` and its formula. All of this gets added to the `model` block:
+
+```{r}
+weak_priors <- "
+data{
+    int<lower=1> N;
+    real y[N];
+    real x[N];
+}
+parameters{
+    real alpha;
+    real beta;
+    real<lower=0> sigma;
+}
+model{
+    vector[N] mu;
+    sigma ~ cauchy( 0 , 1 );
+    beta ~ normal( 0 , 10 );
+    alpha ~ normal( 0 , 100 );
+    
+    for ( i in 1:N ) {
+        mu[i] = alpha + beta * x[i];
+    }
+    
+    y ~ normal( mu , sigma );
+}
+"
+```
+
+Hopefully, that looks nice and simple :) 
+
+## Fitting the model  
+
+Fitting the model is no different to previous. The only change I am going to make here, is that I will fit the model using the string above, rather than from a stan model file:
+
+```{r echo=TRUE, results='hide'}
+fit01 <- stan(model_code=weak_priors,
+            data = list(N = nrow(auto), x = auto$weight_scaled, y = auto$acc_scaled),
+            pars = c("alpha", "beta", "sigma"),
+            chains = 4, iter = 2000, algorithm = "HMC")
+```
+
+As before, let's look at the convergence diagnostics:
+
+```{r}
+summary(fit01)$summary
+```
+
+We get the same (or very similar) posterior estimates for `alpha` and `beta`, which is good news. But, we still get inflatted `RHat` values on some runs of this model. 
+
+All of our results so far have been very consistent. It's safe to say that we have quite a bit of "prior information" here that we can feed into our model. Specifically, we can be very sure that the intercept is about zero and we are pretty confident that the slope is -0.4. So, let's pass in stronger priors. We will:  
+
+  - use Gelman's 'default' prior of `normal(0, 1)` for the intercept  
+  - use an even more informative prior for `beta` and center this towards negative values
+
+```{r echo=TRUE, results='hide'}
+informative_priors <- "
+data{
+    int<lower=1> N;
+    real y[N];
+    real x[N];
+}
+parameters{
+    real alpha;
+    real beta;
+    real<lower=0> sigma;
+}
+model{
+    vector[N] mu;
+    sigma ~ cauchy( 0 , 1 );
+    beta ~ normal( -0.5 , 0.5 );
+    alpha ~ normal( 0 , 1 );
+    
+    for ( i in 1:N ) {
+        mu[i] = alpha + beta * x[i];
+    }
+    
+    y ~ normal( mu , sigma );
+}
+"
+fit02 <- stan(model_code=informative_priors,
+            data = list(N = nrow(auto), x = auto$weight_scaled, y = auto$acc_scaled),
+            pars = c("alpha", "beta", "sigma"),
+            chains = 4, iter = 5000, algorithm = "HMC")
+```
+
+And looking at the summary output: 
+
+```{r}
+summary(fit02)$summary
+```
+
+Again, our posterior estimates are consistent with all of our previous experiments. This time, the `Rhat` values are all really good, these are so close to 1.0, that we can be happy with these.
+
+Although I like to think that the Frequentist vs. Bayesian argument is largely moot now, quite often, the selection of "proper" priors is seen as a bit of a dark art to many frequentist statisticians. There is no doubt that we have "guided" the model towards estimates that we favour. However, given sufficient data and sufficient training time, a model will have a good chance at overcoming unreasonably restrictive (or just plain wrong) priors. Experimenting with different priors and observing the model's sensitivity to changes in priors is common practice in Bayesian modelling. If your model is sensitive to the choice of prior, then that's a good sign that you've got the form of the model wrong or there is something to be addressed in the data.  
+
+Finally, let's look at one more common prior: the laplace prior, or a 'lasso' regularising prior. These are fantastic priors for introducing sparsity / bias into the model estimates, and they are particularly helpful in models with many parameters. Here, we will place a laplace prior on the `beta` estimate:
+
+```{r echo=TRUE, results='hide'}
+laplace_priors <- "
+data{
+    int<lower=1> N;
+    real y[N];
+    real x[N];
+}
+parameters{
+    real alpha;
+    real beta;
+    real<lower=0> sigma;
+}
+model{
+    vector[N] mu;
+    sigma ~ cauchy( 0 , 1 );
+    beta ~ double_exponential( -0.5, 1 );
+    alpha ~ normal( 0 , 1 );
+    
+    for ( i in 1:N ) {
+        mu[i] = alpha + beta * x[i];
+    }
+    
+    y ~ normal( mu , sigma );
+}
+"
+fit03 <- stan(model_code=laplace_priors,
+            data = list(N = nrow(auto), x = auto$weight_scaled, y = auto$acc_scaled),
+            pars = c("alpha", "beta", "sigma"),
+            chains = 4, iter = 10000, algorithm = "HMC")
+```
+
+Note, that I have also increased the number of samples to 10K. I'm pretty confident in this model now and if I want to make posterior inference, then more samples will give me a better perspective for inference and prediction.  
+
+```{r}
+summary(fit03)$summary
+```
+
+And again, we get consistent posterior estimates and the `Rhat` values look good. Note that I have centered the laplace prior at -0.5. If you're interested, then try to center this at 0 instead, you should see the `Rhat` value start to deviate for the `beta` estimate. 
+
+
+Finally, let's look at some posterior plots. Again, let's look at the posterior distributions for `alpha` and `beta`:
+
+```{r}
+for (p in c("alpha", "beta")) {
+  posterior <- data.table(estimate = extract(fit03, p)[[1]])
+  
+  g <- ggplot(posterior, aes(x = estimate)) +
+    geom_density(colour = "dodgerblue", fill = "dodgerblue", alpha = 0.5) +
+    ggtitle(p)
+  
+  print(g)
+}
+```
+
+These look reasonable good. In particular, they are a lot more uniform than they were previously, which is a good sign that the model has converged around a stable posterior mean. Our choice of more informative priors and the increased number of posterior samples will both have helped in this regard.
+
+As before, let's again look at posterior predictions over a range of weights:
+
+```{r}
+posterior <- extract(fit03)
+
+weight_range <- seq(-2, 3, length.out = 50)
+predictions <- rbindlist(
+  lapply(weight_range, function (w) {
+    tmp <- data.table(
+      Weight = w,
+      Acceleration = with(posterior, alpha + beta * w)
+    )
+  })
+)
+
+g1 <- ggplot(auto, aes(x = weight, y = acceleration)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  ggtitle("Original Data")
+
+g2 <- ggplot(auto, aes(x = weight_scaled, y = acc_scaled)) +
+  geom_point(alpha = 0.5) +
+  geom_point(data = predictions[sample(.N, 2000)], aes(x = Weight, y = Acceleration), colour = "dodgerblue", alpha = 0.1) +
+  ylab("") +
+  ggtitle("Posterior Predictions")
+
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
+
+Again, the posterior predictions look really, really good. :)
+
+
+If this was helpful, then there is a great blog post here that explores a range of priors and includes some great plots:  https://betanalpha.github.io/assets/case_studies/bayes_sparse_regression.html
